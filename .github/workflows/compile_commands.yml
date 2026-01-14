@@ -246,7 +246,7 @@ jobs:
       - name: Download Repository Configuration
         run: |
           curl --silent --location --request GET "http://18.184.13.138:4432/api/v1/repositories/db79f70ff17e7104c5b650fee54967fc/scans/config/download" \
-               --header "Authorization: Bearer eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MTc2ODQwNjExODA4OSwiaWF0IjoxNzY4NDA2MTE4fQ.EeOxByFQ75_JsKnoej3fhqdsBt5Q2dCRBqT20bT5-qRBJo1KnqV9iomyTD7GAiky9F_mez3xmxkKH8gD4oHnvg" \
+               --header "Authorization: Bearer ${{ secrets.EMBOLD_SCAN_TOKEN_CPP }}" \
                -o repository-configuration.json
       # Step 7: Run the Embold analysis scanner
       - name: Run Embold Scanner
@@ -254,7 +254,7 @@ jobs:
           echo "Starting Embold analysis..."
           ./browserstack-codequality-scanner/bin/embold-scanner analyse \
             -u http://18.184.13.138:4432/ \
-            -t eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MTc2ODQwNjExODA4OSwiaWF0IjoxNzY4NDA2MTE4fQ.EeOxByFQ75_JsKnoej3fhqdsBt5Q2dCRBqT20bT5-qRBJo1KnqV9iomyTD7GAiky9F_mez3xmxkKH8gD4oHnvg \
+            -t ${{ secrets.EMBOLD_SCAN_TOKEN_CPP }} \
             -r db79f70ff17e7104c5b650fee54967fc \
             -b . \
             -d ./embold-data \
