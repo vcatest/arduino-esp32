@@ -1,0 +1,182 @@
+name: Generate Compile Commands
+
+on:
+  workflow_dispatch:
+    inputs:
+      idf_ver:
+        description: "IDF Version"
+        default: "release-v5.3"
+        type: choice
+        options:
+          - "release-v5.3"
+          - "release-v5.4"
+          - "release-v5.5"
+        required: true
+      idf_target:
+        description: "IDF Target"
+        default: "esp32"
+        type: choice
+        options:
+          - "esp32"
+          - "esp32s2"
+          - "esp32s3"
+          - "esp32c2"
+          - "esp32c3"
+          - "esp32c5"
+          - "esp32c6"
+          - "esp32h2"
+          - "esp32p4"
+        required: true
+      examples:
+        description: "Examples to build (comma-separated, or 'all')"
+        default: "all"
+        type: string
+        required: true
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-generate-compile-commands:
+    name: Build IDF ${{ inputs.idf_ver || 'release-v5.3' }} for ${{ inputs.idf_target || 'esp32' }}
+    runs-on: ubuntu-latest
+    container: espressif/idf:${{ inputs.idf_ver || 'release-v5.3' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          path: components/arduino-esp32
+
+      - name: Setup jq
+        uses: dcarbone/install-jq-action@v3.0.1
+
+      - name: Export IDF environment
+        shell: bash
+        run: |
+          . ${IDF_PATH}/export.sh
+          echo "IDF environment exported"
+
+      - name: Determine examples to build
+        id: examples
+        shell: bash
+        run: |
+          cd components/arduino-esp32
+          
+          if [ "${{ inputs.examples }}" == "all" ] || [ -z "${{ inputs.examples }}" ]; then
+            # Build all examples
+            examples=$(find idf_component_examples -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort)
+          else
+            # Build specified examples
+            examples=$(echo "${{ inputs.examples }}" | tr ',' '\n' | sort)
+          fi
+          
+          echo "Examples to build:"
+          echo "$examples"
+          echo "$examples" > /tmp/examples_to_build.txt
+
+      - name: Build examples and generate compile_commands.json
+        env:
+          IDF_TARGET: ${{ inputs.idf_target || 'esp32' }}
+        shell: bash
+        run: |
+          set -e
+          
+          # Export IDF environment
+          . ${IDF_PATH}/export.sh
+          
+          cd components/arduino-esp32
+          
+          # Create output directory for compile_commands.json files
+          mkdir -p compile_commands_output
+          
+          while IFS= read -r example; do
+            example_path="$PWD/idf_component_examples/$example"
+            
+            if [ ! -d "$example_path" ]; then
+              echo "Warning: Example $example does not exist, skipping..."
+              continue
+            fi
+            
+            # Check if target is supported via ci.json
+            if [ -f "$example_path/ci.json" ]; then
+              is_target=$(jq -r --arg target "$IDF_TARGET" '.targets[$target]' "$example_path/ci.json")
+              if [[ "$is_target" == "false" ]]; then
+                echo "Skipping $example for target $IDF_TARGET (disabled in ci.json)"
+                continue
+              fi
+            fi
+            
+            echo "====================================="
+            echo "Building: $example"
+            echo "Target: $IDF_TARGET"
+            echo "====================================="
+            
+            # Set target
+            idf.py --preview -C "$example_path" set-target "$IDF_TARGET"
+            
+            # Build the project (this generates compile_commands.json in build directory)
+            idf.py --preview -C "$example_path" -DEXTRA_COMPONENT_DIRS="$PWD" build
+            
+            # Copy compile_commands.json to output directory
+            if [ -f "$example_path/build/compile_commands.json" ]; then
+              cp "$example_path/build/compile_commands.json" "$PWD/compile_commands_output/${example}_compile_commands.json"
+              echo "✓ Generated compile_commands.json for $example"
+            else
+              echo "✗ No compile_commands.json found for $example"
+            fi
+            
+            echo ""
+          done < /tmp/examples_to_build.txt
+          
+          # Create a merged compile_commands.json (combines all examples)
+          if [ -n "$(ls -A compile_commands_output/*.json 2>/dev/null)" ]; then
+            echo "Merging all compile_commands.json files..."
+            jq -s 'add' compile_commands_output/*_compile_commands.json > compile_commands_output/compile_commands_merged.json
+            echo "✓ Created merged compile_commands.json"
+          fi
+
+      - name: Upload compile_commands.json files
+        uses: actions/upload-artifact@v4
+        with:
+          name: compile-commands-${{ inputs.idf_target || 'esp32' }}-${{ inputs.idf_ver || 'release-v5.3' }}
+          path: |
+            components/arduino-esp32/compile_commands_output/*.json
+            components/arduino-esp32/idf_component_examples/**/build/compile_commands.json
+          if-no-files-found: warn
+
+      - name: Upload build artifacts (optional)
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts-${{ inputs.idf_target || 'esp32' }}-${{ inputs.idf_ver || 'release-v5.3' }}
+          path: |
+            components/arduino-esp32/idf_component_examples/**/build/*.bin
+            components/arduino-esp32/idf_component_examples/**/build/*.elf
+            components/arduino-esp32/idf_component_examples/**/build/*.map
+            components/arduino-esp32/idf_component_examples/**/build/sdkconfig
+          if-no-files-found: warn
+
+      - name: Summary
+        shell: bash
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **IDF Version:** ${{ inputs.idf_ver || 'release-v5.3' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Target:** ${{ inputs.idf_target || 'esp32' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Examples:** ${{ inputs.examples || 'all' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          cd components/arduino-esp32/compile_commands_output
+          if [ -n "$(ls -A *.json 2>/dev/null)" ]; then
+            echo "### Generated Files:" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            for file in *.json; do
+              size=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file")
+              echo "- \`$file\` ($(numfmt --to=iec-i --suffix=B $size 2>/dev/null || echo $size bytes))" >> $GITHUB_STEP_SUMMARY
+            done
+          else
+            echo "⚠️ No compile_commands.json files were generated" >> $GITHUB_STEP_SUMMARY
+          fi
