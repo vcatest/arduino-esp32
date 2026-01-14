@@ -93,6 +93,49 @@ jobs:
           # Create output directory for compile_commands.json files
           mkdir -p compile_commands_output
           
+          # Define check_requirements function
+          check_requirements() {
+            local example_path=$1
+            local target=$2
+            
+            # Check if ci.json exists and has requirements
+            if [ -f "$example_path/ci.json" ]; then
+              # Check if target is explicitly disabled
+              is_target=$(jq -r --arg target "$target" '.targets[$target]' "$example_path/ci.json" 2>/dev/null || echo "null")
+              if [[ "$is_target" == "false" ]]; then
+                return 1  # Target disabled
+              fi
+              
+              # Check requirements array
+              requirements=$(jq -r '.requires[]?' "$example_path/ci.json" 2>/dev/null || echo "")
+              if [ -n "$requirements" ]; then
+                while IFS= read -r req; do
+                  if [ -n "$req" ]; then
+                    # Simple SOC capability check based on target
+                    case "$req" in
+                      *USB_SERIAL_JTAG*)
+                        # ESP32 (classic) doesn't support USB Serial JTAG
+                        if [[ "$target" == "esp32" ]]; then
+                          echo "Requirement not met: $req (target: $target)"
+                          return 1
+                        fi
+                        ;;
+                      *USB_OTG*)
+                        # Only S2, S3, P4 support USB OTG
+                        if [[ "$target" != "esp32s2" && "$target" != "esp32s3" && "$target" != "esp32p4" ]]; then
+                          echo "Requirement not met: $req (target: $target)"
+                          return 1
+                        fi
+                        ;;
+                    esac
+                  fi
+                done <<< "$requirements"
+              fi
+            fi
+            
+            return 0  # Requirements met
+          }
+          
           while IFS= read -r example; do
             example_path="$PWD/idf_component_examples/$example"
             
@@ -101,13 +144,12 @@ jobs:
               continue
             fi
             
-            # Check if target is supported via ci.json
-            if [ -f "$example_path/ci.json" ]; then
-              is_target=$(jq -r --arg target "$IDF_TARGET" '.targets[$target]' "$example_path/ci.json")
-              if [[ "$is_target" == "false" ]]; then
-                echo "Skipping $example for target $IDF_TARGET (disabled in ci.json)"
-                continue
-              fi
+            # Check if example meets requirements for target
+            if ! check_requirements "$example_path" "$IDF_TARGET"; then
+              echo ""
+              echo "⊘ Skipping $example for target $IDF_TARGET (requirements not met)"
+              echo ""
+              continue
             fi
             
             echo "====================================="
@@ -115,18 +157,24 @@ jobs:
             echo "Target: $IDF_TARGET"
             echo "====================================="
             
-            # Set target
-            idf.py --preview -C "$example_path" set-target "$IDF_TARGET"
+            # Set target (continue on error to try other examples)
+            if ! idf.py --preview -C "$example_path" set-target "$IDF_TARGET"; then
+              echo "✗ Failed to set target for $example"
+              echo ""
+              continue
+            fi
             
             # Build the project (this generates compile_commands.json in build directory)
-            idf.py --preview -C "$example_path" -DEXTRA_COMPONENT_DIRS="$PWD" build
-            
-            # Copy compile_commands.json to output directory
-            if [ -f "$example_path/build/compile_commands.json" ]; then
-              cp "$example_path/build/compile_commands.json" "$PWD/compile_commands_output/${example}_compile_commands.json"
-              echo "✓ Generated compile_commands.json for $example"
+            if idf.py --preview -C "$example_path" -DEXTRA_COMPONENT_DIRS="$PWD" build; then
+              # Copy compile_commands.json to output directory
+              if [ -f "$example_path/build/compile_commands.json" ]; then
+                cp "$example_path/build/compile_commands.json" "$PWD/compile_commands_output/${example}_compile_commands.json"
+                echo "✓ Generated compile_commands.json for $example"
+              else
+                echo "✗ No compile_commands.json found for $example"
+              fi
             else
-              echo "✗ No compile_commands.json found for $example"
+              echo "✗ Build failed for $example (continuing with other examples)"
             fi
             
             echo ""
