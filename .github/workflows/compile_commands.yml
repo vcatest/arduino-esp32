@@ -45,189 +45,189 @@ jobs:
     runs-on: ubuntu-latest
     container: espressif/idf:${{ inputs.idf_ver || 'release-v5.3' }}
     steps:
-      # - name: Checkout repository
-      #   uses: actions/checkout@v4
-      #   with:
-      #     submodules: recursive
-      #     path: components/arduino-esp32
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          path: components/arduino-esp32
 
-      # - name: Setup jq
-      #   uses: dcarbone/install-jq-action@v3.0.1
+      - name: Setup jq
+        uses: dcarbone/install-jq-action@v3.0.1
 
-      # - name: Export IDF environment
-      #   shell: bash
-      #   run: |
-      #     . ${IDF_PATH}/export.sh
-      #     echo "IDF environment exported"
+      - name: Export IDF environment
+        shell: bash
+        run: |
+          . ${IDF_PATH}/export.sh
+          echo "IDF environment exported"
 
-      # - name: Determine examples to build
-      #   id: examples
-      #   shell: bash
-      #   run: |
-      #     cd components/arduino-esp32
+      - name: Determine examples to build
+        id: examples
+        shell: bash
+        run: |
+          cd components/arduino-esp32
           
-      #     if [ "${{ inputs.examples }}" == "all" ] || [ -z "${{ inputs.examples }}" ]; then
-      #       # Build all examples
-      #       examples=$(find idf_component_examples -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort)
-      #     else
-      #       # Build specified examples
-      #       examples=$(echo "${{ inputs.examples }}" | tr ',' '\n' | sort)
-      #     fi
+          if [ "${{ inputs.examples }}" == "all" ] || [ -z "${{ inputs.examples }}" ]; then
+            # Build all examples
+            examples=$(find idf_component_examples -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort)
+          else
+            # Build specified examples
+            examples=$(echo "${{ inputs.examples }}" | tr ',' '\n' | sort)
+          fi
           
-      #     echo "Examples to build:"
-      #     echo "$examples"
-      #     echo "$examples" > /tmp/examples_to_build.txt
+          echo "Examples to build:"
+          echo "$examples"
+          echo "$examples" > /tmp/examples_to_build.txt
 
-      # - name: Build examples and generate compile_commands.json
-      #   env:
-      #     IDF_TARGET: ${{ inputs.idf_target || 'esp32' }}
-      #   shell: bash
-      #   run: |
-      #     set -e
+      - name: Build examples and generate compile_commands.json
+        env:
+          IDF_TARGET: ${{ inputs.idf_target || 'esp32' }}
+        shell: bash
+        run: |
+          set -e
           
-      #     # Export IDF environment
-      #     . ${IDF_PATH}/export.sh
+          # Export IDF environment
+          . ${IDF_PATH}/export.sh
           
-      #     cd components/arduino-esp32
+          cd components/arduino-esp32
           
-      #     # Create output directory for compile_commands.json files
-      #     mkdir -p compile_commands_output
+          # Create output directory for compile_commands.json files
+          mkdir -p compile_commands_output
           
-      #     # Define check_requirements function
-      #     check_requirements() {
-      #       local example_path=$1
-      #       local target=$2
+          # Define check_requirements function
+          check_requirements() {
+            local example_path=$1
+            local target=$2
             
-      #       # Check if ci.json exists and has requirements
-      #       if [ -f "$example_path/ci.json" ]; then
-      #         # Check if target is explicitly disabled
-      #         is_target=$(jq -r --arg target "$target" '.targets[$target]' "$example_path/ci.json" 2>/dev/null || echo "null")
-      #         if [[ "$is_target" == "false" ]]; then
-      #           return 1  # Target disabled
-      #         fi
+            # Check if ci.json exists and has requirements
+            if [ -f "$example_path/ci.json" ]; then
+              # Check if target is explicitly disabled
+              is_target=$(jq -r --arg target "$target" '.targets[$target]' "$example_path/ci.json" 2>/dev/null || echo "null")
+              if [[ "$is_target" == "false" ]]; then
+                return 1  # Target disabled
+              fi
               
-      #         # Check requirements array
-      #         requirements=$(jq -r '.requires[]?' "$example_path/ci.json" 2>/dev/null || echo "")
-      #         if [ -n "$requirements" ]; then
-      #           while IFS= read -r req; do
-      #             if [ -n "$req" ]; then
-      #               # Simple SOC capability check based on target
-      #               case "$req" in
-      #                 *USB_SERIAL_JTAG*)
-      #                   # ESP32 (classic) doesn't support USB Serial JTAG
-      #                   if [[ "$target" == "esp32" ]]; then
-      #                     echo "Requirement not met: $req (target: $target)"
-      #                     return 1
-      #                   fi
-      #                   ;;
-      #                 *USB_OTG*)
-      #                   # Only S2, S3, P4 support USB OTG
-      #                   if [[ "$target" != "esp32s2" && "$target" != "esp32s3" && "$target" != "esp32p4" ]]; then
-      #                     echo "Requirement not met: $req (target: $target)"
-      #                     return 1
-      #                   fi
-      #                   ;;
-      #               esac
-      #             fi
-      #           done <<< "$requirements"
-      #         fi
-      #       fi
+              # Check requirements array
+              requirements=$(jq -r '.requires[]?' "$example_path/ci.json" 2>/dev/null || echo "")
+              if [ -n "$requirements" ]; then
+                while IFS= read -r req; do
+                  if [ -n "$req" ]; then
+                    # Simple SOC capability check based on target
+                    case "$req" in
+                      *USB_SERIAL_JTAG*)
+                        # ESP32 (classic) doesn't support USB Serial JTAG
+                        if [[ "$target" == "esp32" ]]; then
+                          echo "Requirement not met: $req (target: $target)"
+                          return 1
+                        fi
+                        ;;
+                      *USB_OTG*)
+                        # Only S2, S3, P4 support USB OTG
+                        if [[ "$target" != "esp32s2" && "$target" != "esp32s3" && "$target" != "esp32p4" ]]; then
+                          echo "Requirement not met: $req (target: $target)"
+                          return 1
+                        fi
+                        ;;
+                    esac
+                  fi
+                done <<< "$requirements"
+              fi
+            fi
             
-      #       return 0  # Requirements met
-      #     }
+            return 0  # Requirements met
+          }
           
-      #     while IFS= read -r example; do
-      #       example_path="$PWD/idf_component_examples/$example"
+          while IFS= read -r example; do
+            example_path="$PWD/idf_component_examples/$example"
             
-      #       if [ ! -d "$example_path" ]; then
-      #         echo "Warning: Example $example does not exist, skipping..."
-      #         continue
-      #       fi
+            if [ ! -d "$example_path" ]; then
+              echo "Warning: Example $example does not exist, skipping..."
+              continue
+            fi
             
-      #       # Check if example meets requirements for target
-      #       if ! check_requirements "$example_path" "$IDF_TARGET"; then
-      #         echo ""
-      #         echo "⊘ Skipping $example for target $IDF_TARGET (requirements not met)"
-      #         echo ""
-      #         continue
-      #       fi
+            # Check if example meets requirements for target
+            if ! check_requirements "$example_path" "$IDF_TARGET"; then
+              echo ""
+              echo "⊘ Skipping $example for target $IDF_TARGET (requirements not met)"
+              echo ""
+              continue
+            fi
             
-      #       echo "====================================="
-      #       echo "Building: $example"
-      #       echo "Target: $IDF_TARGET"
-      #       echo "====================================="
+            echo "====================================="
+            echo "Building: $example"
+            echo "Target: $IDF_TARGET"
+            echo "====================================="
             
-      #       # Set target (continue on error to try other examples)
-      #       if ! idf.py --preview -C "$example_path" set-target "$IDF_TARGET"; then
-      #         echo "✗ Failed to set target for $example"
-      #         echo ""
-      #         continue
-      #       fi
+            # Set target (continue on error to try other examples)
+            if ! idf.py --preview -C "$example_path" set-target "$IDF_TARGET"; then
+              echo "✗ Failed to set target for $example"
+              echo ""
+              continue
+            fi
             
-      #       # Build the project (this generates compile_commands.json in build directory)
-      #       if idf.py --preview -C "$example_path" -DEXTRA_COMPONENT_DIRS="$PWD" build; then
-      #         # Copy compile_commands.json to output directory
-      #         if [ -f "$example_path/build/compile_commands.json" ]; then
-      #           cp "$example_path/build/compile_commands.json" "$PWD/compile_commands_output/${example}_compile_commands.json"
-      #           echo "✓ Generated compile_commands.json for $example"
-      #         else
-      #           echo "✗ No compile_commands.json found for $example"
-      #         fi
-      #       else
-      #         echo "✗ Build failed for $example (continuing with other examples)"
-      #       fi
+            # Build the project (this generates compile_commands.json in build directory)
+            if idf.py --preview -C "$example_path" -DEXTRA_COMPONENT_DIRS="$PWD" build; then
+              # Copy compile_commands.json to output directory
+              if [ -f "$example_path/build/compile_commands.json" ]; then
+                cp "$example_path/build/compile_commands.json" "$PWD/compile_commands_output/${example}_compile_commands.json"
+                echo "✓ Generated compile_commands.json for $example"
+              else
+                echo "✗ No compile_commands.json found for $example"
+              fi
+            else
+              echo "✗ Build failed for $example (continuing with other examples)"
+            fi
             
-      #       echo ""
-      #     done < /tmp/examples_to_build.txt
+            echo ""
+          done < /tmp/examples_to_build.txt
           
-      #     # Create a merged compile_commands.json (combines all examples)
-      #     if [ -n "$(ls -A compile_commands_output/*.json 2>/dev/null)" ]; then
-      #       echo "Merging all compile_commands.json files..."
-      #       jq -s 'add' compile_commands_output/*_compile_commands.json > compile_commands_output/compile_commands_merged.json
-      #       echo "✓ Created merged compile_commands.json"
-      #     fi
+          # Create a merged compile_commands.json (combines all examples)
+          if [ -n "$(ls -A compile_commands_output/*.json 2>/dev/null)" ]; then
+            echo "Merging all compile_commands.json files..."
+            jq -s 'add' compile_commands_output/*_compile_commands.json > compile_commands_output/compile_commands_merged.json
+            echo "✓ Created merged compile_commands.json"
+          fi
 
-      # - name: Upload compile_commands.json files
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: compile-commands-${{ inputs.idf_target || 'esp32' }}-${{ inputs.idf_ver || 'release-v5.3' }}
-      #     path: |
-      #       components/arduino-esp32/compile_commands_output/*.json
-      #       components/arduino-esp32/idf_component_examples/**/build/compile_commands.json
-      #     if-no-files-found: warn
+      - name: Upload compile_commands.json files
+        uses: actions/upload-artifact@v4
+        with:
+          name: compile-commands-${{ inputs.idf_target || 'esp32' }}-${{ inputs.idf_ver || 'release-v5.3' }}
+          path: |
+            components/arduino-esp32/compile_commands_output/*.json
+            components/arduino-esp32/idf_component_examples/**/build/compile_commands.json
+          if-no-files-found: warn
 
-      # - name: Upload build artifacts (optional)
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: build-artifacts-${{ inputs.idf_target || 'esp32' }}-${{ inputs.idf_ver || 'release-v5.3' }}
-      #     path: |
-      #       components/arduino-esp32/idf_component_examples/**/build/*.bin
-      #       components/arduino-esp32/idf_component_examples/**/build/*.elf
-      #       components/arduino-esp32/idf_component_examples/**/build/*.map
-      #       components/arduino-esp32/idf_component_examples/**/build/sdkconfig
-      #     if-no-files-found: warn
+      - name: Upload build artifacts (optional)
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts-${{ inputs.idf_target || 'esp32' }}-${{ inputs.idf_ver || 'release-v5.3' }}
+          path: |
+            components/arduino-esp32/idf_component_examples/**/build/*.bin
+            components/arduino-esp32/idf_component_examples/**/build/*.elf
+            components/arduino-esp32/idf_component_examples/**/build/*.map
+            components/arduino-esp32/idf_component_examples/**/build/sdkconfig
+          if-no-files-found: warn
 
-      # - name: Summary
-      #   shell: bash
-      #   run: |
-      #     echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
-      #     echo "" >> $GITHUB_STEP_SUMMARY
-      #     echo "- **IDF Version:** ${{ inputs.idf_ver || 'release-v5.3' }}" >> $GITHUB_STEP_SUMMARY
-      #     echo "- **Target:** ${{ inputs.idf_target || 'esp32' }}" >> $GITHUB_STEP_SUMMARY
-      #     echo "- **Examples:** ${{ inputs.examples || 'all' }}" >> $GITHUB_STEP_SUMMARY
-      #     echo "" >> $GITHUB_STEP_SUMMARY
+      - name: Summary
+        shell: bash
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **IDF Version:** ${{ inputs.idf_ver || 'release-v5.3' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Target:** ${{ inputs.idf_target || 'esp32' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Examples:** ${{ inputs.examples || 'all' }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           
-      #     cd components/arduino-esp32/compile_commands_output
-      #     if [ -n "$(ls -A *.json 2>/dev/null)" ]; then
-      #       echo "### Generated Files:" >> $GITHUB_STEP_SUMMARY
-      #       echo "" >> $GITHUB_STEP_SUMMARY
-      #       for file in *.json; do
-      #         size=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file")
-      #         echo "- \`$file\` ($(numfmt --to=iec-i --suffix=B $size 2>/dev/null || echo $size bytes))" >> $GITHUB_STEP_SUMMARY
-      #       done
-      #     else
-      #       echo "⚠️ No compile_commands.json files were generated" >> $GITHUB_STEP_SUMMARY
-      #     fi
+          cd components/arduino-esp32/compile_commands_output
+          if [ -n "$(ls -A *.json 2>/dev/null)" ]; then
+            echo "### Generated Files:" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            for file in *.json; do
+              size=$(stat -c%s "$file" 2>/dev/null || stat -f%z "$file")
+              echo "- \`$file\` ($(numfmt --to=iec-i --suffix=B $size 2>/dev/null || echo $size bytes))" >> $GITHUB_STEP_SUMMARY
+            done
+          else
+            echo "⚠️ No compile_commands.json files were generated" >> $GITHUB_STEP_SUMMARY
+          fi
 
       # Step 1: Check out your repository code
       - name: Checkout Repository
