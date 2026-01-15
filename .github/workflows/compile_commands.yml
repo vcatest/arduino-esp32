@@ -232,6 +232,8 @@ jobs:
       # Add this step BEFORE "Run Embold Scanner" in your workflow:
       - name: Prepare Compilation Database for Embold
         run: |
+          ls /__w/arduino-esp32/arduino-esp32
+          ls /__w/arduino-esp32/arduino-esp32/components/arduino-esp32/compile_commands_output
           cp components/arduino-esp32/compile_commands_output/compile_commands_merged.json \
           /__w/arduino-esp32/arduino-esp32/compile_commands.json
        
