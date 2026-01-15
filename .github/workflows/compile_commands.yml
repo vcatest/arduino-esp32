@@ -245,12 +245,12 @@ jobs:
           echo "ls /__w/arduino-esp32/arduino-esp32/components/arduino-esp32/compile_commands_output"
           ls /__w/arduino-esp32/arduino-esp32/components/arduino-esp32/compile_commands_output
        
-      # Step 1: Check out your repository code
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          # Fetch full history for accurate analysis
-          fetch-depth: 0
+      # # Step 1: Check out your repository code
+      # - name: Checkout Repository
+      #   uses: actions/checkout@v4
+      #   with:
+      #     # Fetch full history for accurate analysis
+      #     fetch-depth: 0
 
       # Step 2: Set up Java (required for Embold scanner)
       - name: Set up JDK 17
