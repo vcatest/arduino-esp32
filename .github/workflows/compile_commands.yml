@@ -236,6 +236,10 @@ jobs:
           ls /__w/arduino-esp32/arduino-esp32/components/arduino-esp32/compile_commands_output
           cp components/arduino-esp32/compile_commands_output/compile_commands_merged.json \
           /__w/arduino-esp32/arduino-esp32/compile_commands.json
+          cp components/arduino-esp32/compile_commands_output/compile_commands_merged.json \
+          components/arduino-esp32/compile_commands_output/compile_commands.json
+          ls /__w/arduino-esp32/arduino-esp32
+          ls /__w/arduino-esp32/arduino-esp32/components/arduino-esp32/compile_commands_output
        
       # Step 1: Check out your repository code
       - name: Checkout Repository
